@@ -18,3 +18,12 @@ if __name__ == "__main__":
     images, labels = next(iter(train_loader))
     print("images:", images.shape)
     print("labels:", labels.shape, labels[:10])
+    
+    
+# 70000 MINST i endirir
+# Resimler 28x28 pikselden 14x14'e iner. Daha az piksel demek ağ için daha az iş demek.
+# Ag resim zad gormur reqem gorur . Her pikseli  0 ve 1 arasinda sayiya donusdurur . 0 qara 1 ag
+# Tek sefer de 64 lu grup halinda verir sekilleri . 64 resme baxib texmin edir ve agirliqlari ona gore duzeldir .
+# 70000 nin 10000 i test 60000 train ucundur 
+
+# Train ve quantitize n feed i bu file dir .

@@ -63,7 +63,7 @@ MNIST is downloaded automatically into `data/` on the first run.
 - [x] Data pipeline and 14x14 downscaling
 - [x] Float model training
 - [x] Layer 1 int8 quantization
-- [ ] Layer 2 int8 quantization
-- [ ] Integer-only reference model (int32 bias, requantization between layers)
+- [x] Layer 2 int8 quantization
+- [x] Integer-only reference model (int32 bias, requantization between layers)
 - [ ] Export weights and test vectors for the FPGA
 - [ ] FPGA implementation

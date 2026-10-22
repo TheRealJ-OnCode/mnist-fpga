@@ -23,3 +23,4 @@ for epoch in range(5):
         optimizer.step()
     print(f"epoch {epoch + 1}: loss {loss.item():.3f}, accuracy {evaluate():.4f}")
 torch.save(model.state_dict(), "model_float.pt")
+# Bu fayl artiq train edib basqa yere fayli yazir . Oyrendiyi seylerdi bu , 5 defe baxir ve %94.5 e cixir dogrulugu
