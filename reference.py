@@ -69,22 +69,32 @@ def downscale_int(img):
     return out.flatten()
 
 
-def infer(x):
-    """Integer-only forward pass. x: 196 pixels (0-255). Returns 10 int32 scores."""
-    acc1 = q1.astype(np.int32) @ x + b1_q            # layer 1: 16 int32 sums
+def layer1(x):
+    """x: 196 pixels (0-255). Returns 16 hidden values (0-255)."""
+    acc1 = q1.astype(np.int32) @ x + b1_q            # 16 int32 sums
     acc1 = np.maximum(acc1, 0)                        # ReLU
     h = (acc1 * M0 + (1 << (SHIFT - 1))) >> SHIFT     # requantization
     h = np.minimum(h, 255)                            # saturation
-    acc2 = q2.astype(np.int32) @ h + b2_q             # layer 2: 10 int32 scores
-    return acc2
+    return h
 
 
-print("first test image scores:", infer(downscale_int(raw[0])).tolist(), "| label:", labels[0])
+def layer2(h):
+    """h: 16 hidden values (0-255). Returns 10 int32 scores."""
+    return q2.astype(np.int32) @ h + b2_q
 
-correct = 0
-for i in range(len(labels)):
-    scores = infer(downscale_int(raw[i]))
-    if scores.argmax() == labels[i]:
-        correct += 1
 
-print("integer accuracy:", correct / len(labels))
+def infer(x):
+    """Integer-only forward pass. x: 196 pixels (0-255). Returns 10 int32 scores."""
+    return layer2(layer1(x))
+
+
+if __name__ == "__main__":
+    print("first test image scores:", infer(downscale_int(raw[0])).tolist(), "| label:", labels[0])
+
+    correct = 0
+    for i in range(len(labels)):
+        scores = infer(downscale_int(raw[i]))
+        if scores.argmax() == labels[i]:
+            correct += 1
+
+    print("integer accuracy:", correct / len(labels))
