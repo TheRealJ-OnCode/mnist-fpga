@@ -1,11 +1,4 @@
-.venv/
+python/.venv/
+python/data/
 __pycache__/
 *.pyc
-
-data/
-
-work/
-*.cf
-*.ghw
-*.vcd
-*.wlf

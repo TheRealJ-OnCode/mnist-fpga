@@ -27,6 +27,7 @@ This part trains a small network in Python, converts it to integers, and exports
 Run order:
 
 ```
+cd python
 python train.py
 python quantitize.py
 ```
@@ -35,12 +36,12 @@ python quantitize.py
 
 | Symbol | Formula | Value |
 |---|---|---|
-| `s_w1` | `127 / max|W1|` | 115.0558 |
+| `s_w1` | `127 / max\|W1\|` | 115.0558 |
 | `W1_q` | `round(W1 · s_w1)` | int8, range −127 … 113 |
 | `b1_q` | `round(b1 · s_w1 · 255)` | range −12473 … 24079 |
 | `k` | smallest k with `max(h1) >> k ≤ 255` (on training set) | **11** |
 | `s_h` | `s_w1 · 255 / 2^k` | 14.3258 |
-| `s_w2` | `127 / max|W2|` | 50.3694 |
+| `s_w2` | `127 / max\|W2\|` | 50.3694 |
 | `W2_q` | `round(W2 · s_w2)` | int8, range −127 … 104 |
 | `b2_q` | `round(b2 · s_w2 · s_h)` | range −453 … 456 |
 
