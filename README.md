@@ -1,8 +1,11 @@
-# MNIST Digit Classifier in Hardware — Python Side
+# MNIST Digit Classifier in Hardware
 
 Goal: recognize a handwritten digit with a pure hardware circuit (VHDL). No CPU, no software, no floats, no division. Only addition, multiplication and comparison.
 
-This part trains a small network in Python, converts it to integers, and exports the weights and test vectors that the VHDL design will use. The integer model here is the **bit-exact reference** for the circuit.
+The project has two parts:
+
+- **Python** (`python/`): trains a small network, converts it to integers, and exports the weights and test vectors. The integer model is the **bit-exact reference** for the circuit.
+- **VHDL** (`VHDL/`): the circuit itself, built and verified module by module. See [VHDL status](#vhdl-status).
 
 ## Network
 
@@ -100,3 +103,30 @@ W2[k][j] → address 3136 + k·16 + j    (3136 … 3295)
 - Order after layer 1: ReLU → `>> 11` → saturate at 255.
 - Layer 2 input is the 16 stored `h1_q` values, same 0–255 format as pixels, so one MAC serves both layers.
 - Argmax: use `>` (not `>=`) when scanning 0 → 9 to match Python tie-breaking.
+
+## VHDL status
+
+Each module has its own self-checking testbench. Expected values come from the Python integer model, not from the files the ROMs read.
+
+| Module | Description | Status |
+|---|---|---|
+| `weight_rom` | 3296 × 8-bit signed, 12-bit address, synchronous read, initialized from `weights.txt` | ✅ verified |
+| `bias_rom` | 26 × 24-bit signed, 5-bit address, synchronous read, initialized from `biases.txt` | ✅ verified |
+| MAC | 8-bit × 8-bit multiply, 24-bit accumulator, starts at bias | ⏳ |
+| ReLU / requantize / argmax | `max(0, z)`, `>> 11`, saturate at 255, first-max index | ⏳ |
+| FSM + top level | sequences 3296 MACs, stores 16 `h1_q` values | ⏳ |
+| Full testbench | 500 test images vs. `expected.txt` | ⏳ |
+
+ROM tests check the first entry, the largest and smallest values, the layer 1 / layer 2 boundary, and the last entry, which covers file path, bit width, sign and ordering errors.
+
+### Running a testbench
+
+Requires [GHDL](https://github.com/ghdl/ghdl) (and optionally GTKWave). Run from `VHDL/`:
+
+```
+ghdl -a --std=08 weight_rom.vhd weight_rom_tb.vhd
+ghdl -e --std=08 weight_rom_tb
+ghdl -r --std=08 weight_rom_tb --wave=rom.ghw
+```
+
+Same pattern for `bias_rom`. A passing run prints the checked values and no `HATA` (error) lines.
