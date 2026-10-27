@@ -2,3 +2,5 @@ python/.venv/
 python/data/
 __pycache__/
 *.pyc
+*.ghw
+*.cf
