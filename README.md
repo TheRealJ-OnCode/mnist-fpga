@@ -98,7 +98,7 @@ W2[k][j] → address 3136 + k·16 + j    (3136 … 3295)
 
 ## Hardware notes
 
-- Product: 8-bit unsigned × 8-bit signed → 16 bit signed. Extend pixel as `'0' & pixel` before multiplying.
+- Product: 8-bit unsigned pixel × 8-bit signed weight. The pixel is zero-extended to 9-bit signed (`'0' & pixel`), so the VHDL product is 17 bits (values fit in 16), then sign-extended to 24 bits before accumulation.
 - Accumulator: 24 bit signed (layer 1 worst case 196 · 32640 ≈ 6.4 M; layer 2 needs 20 bit).
 - Order after layer 1: ReLU → `>> 11` → saturate at 255.
 - Layer 2 input is the 16 stored `h1_q` values, same 0–255 format as pixels, so one MAC serves both layers.
@@ -112,12 +112,18 @@ Each module has its own self-checking testbench. Expected values come from the P
 |---|---|---|
 | `weight_rom` | 3296 × 8-bit signed, 12-bit address, synchronous read, initialized from `weights.txt` | ✅ verified |
 | `bias_rom` | 26 × 24-bit signed, 5-bit address, synchronous read, initialized from `biases.txt` | ✅ verified |
-| MAC | 8-bit × 8-bit multiply, 24-bit accumulator, starts at bias | ⏳ |
+| `mac` | 8-bit unsigned × 8-bit signed multiply, 24-bit accumulator; `load` starts a neuron at its bias, `en` accumulates, `load` has priority | ✅ verified |
 | ReLU / requantize / argmax | `max(0, z)`, `>> 11`, saturate at 255, first-max index | ⏳ |
 | FSM + top level | sequences 3296 MACs, stores 16 `h1_q` values | ⏳ |
 | Full testbench | 500 test images vs. `expected.txt` | ⏳ |
 
 ROM tests check the first entry, the largest and smallest values, the layer 1 / layer 2 boundary, and the last entry, which covers file path, bit width, sign and ordering errors.
+
+The MAC test runs a short sequence with hand-computed results: load bias, then accumulate with a negative weight, a pixel above 127 (checks the `'0' & pixel` extension), and the extreme product 255 × −128; then hold with `en = 0`, and reload with `load` and `en` both high.
+
+![MAC simulation](VHDL/img/mac_wave.png)
+
+*`acc_out` goes 5 → 25 → 13 → −187 → −32827, holds while `en = 0`, and reloads the new bias (−12473) on `load`.*
 
 ### Running a testbench
 
@@ -129,4 +135,4 @@ ghdl -e --std=08 weight_rom_tb
 ghdl -r --std=08 weight_rom_tb --wave=rom.ghw
 ```
 
-Same pattern for `bias_rom`. A passing run prints the checked values and no `HATA` (error) lines.
+Same pattern for `bias_rom` and `mac`. A passing run prints the checked values and no `HATA` (error) lines.
