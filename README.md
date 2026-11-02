@@ -113,7 +113,8 @@ Each module has its own self-checking testbench. Expected values come from the P
 | `weight_rom` | 3296 × 8-bit signed, 12-bit address, synchronous read, initialized from `weights.txt` | ✅ verified |
 | `bias_rom` | 26 × 24-bit signed, 5-bit address, synchronous read, initialized from `biases.txt` | ✅ verified |
 | `mac` | 8-bit unsigned × 8-bit signed multiply, 24-bit accumulator; `load` starts a neuron at its bias, `en` accumulates, `load` has priority | ✅ verified |
-| ReLU / requantize / argmax | `max(0, z)`, `>> 11`, saturate at 255, first-max index | ⏳ |
+| `requant` | Combinational: ReLU → `>> K` (K = 11) → saturate at 255; 24-bit signed in, 8-bit unsigned out | ✅ verified |
+| `argmax` | Streaming max over the 10 scores as they arrive; `clear` resets, `en` compares, strict `>` keeps the first index on ties | ✅ verified |
 | FSM + top level | sequences 3296 MACs, stores 16 `h1_q` values | ⏳ |
 | Full testbench | 500 test images vs. `expected.txt` | ⏳ |
 
@@ -125,6 +126,14 @@ The MAC test runs a short sequence with hand-computed results: load bias, then a
 
 *`acc_out` goes 5 → 25 → 13 → −187 → −32827, holds while `en = 0`, and reloads the new bias (−12473) on `load`.*
 
+The `requant` test checks the ReLU (including z = −1, which would wrap to 255 without it), the shift boundary (2047 → 0, 2048 → 1), the largest value seen in training (274371 → 133), and the saturation boundary (524287 → 255 without clamping, 524288 → 256 → clamped to 255).
+
+The `argmax` test feeds score sequences with ties (expects the first index, as in Python's `argmax`), an all-negative sequence (checks the −2²³ starting value), a large score with `en = 0` (must be ignored), and `clear` together with `en` (clear wins).
+
+![argmax simulation](VHDL/img/argmax_wave.png)
+
+*`digit` follows the running maximum and stays at 2 when the equal score (230) arrives again at index 6.*
+
 ### Running a testbench
 
 Requires [GHDL](https://github.com/ghdl/ghdl) (and optionally GTKWave). Run from `VHDL/`:
@@ -135,4 +144,4 @@ ghdl -e --std=08 weight_rom_tb
 ghdl -r --std=08 weight_rom_tb --wave=rom.ghw
 ```
 
-Same pattern for `bias_rom` and `mac`. A passing run prints the checked values and no `HATA` (error) lines.
+Same pattern for `bias_rom`, `mac`, `requant` and `argmax`. A passing run prints the checked values and no `HATA` (error) lines.
