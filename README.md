@@ -115,8 +115,8 @@ Each module has its own self-checking testbench. Expected values come from the P
 | `mac` | 8-bit unsigned × 8-bit signed multiply, 24-bit accumulator; `load` starts a neuron at its bias, `en` accumulates, `load` has priority | ✅ verified |
 | `requant` | Combinational: ReLU → `>> K` (K = 11) → saturate at 255; 24-bit signed in, 8-bit unsigned out | ✅ verified |
 | `argmax` | Streaming max over the 10 scores as they arrive; `clear` resets, `en` compares, strict `>` keeps the first index on ties | ✅ verified |
-| FSM + top level | sequences 3296 MACs, stores 16 `h1_q` values | ⏳ |
-| Full testbench | 500 test images vs. `expected.txt` | ⏳ |
+| `mnist_core` | Top level + FSM: sequences all 3296 MACs, stores the 16 `h1_q` values, feeds the 10 scores to `argmax` | ✅ verified |
+| `mnist_tb` | 500 test images vs. `expected.txt` | ✅ **500 / 500** bit-exact |
 
 ROM tests check the first entry, the largest and smallest values, the layer 1 / layer 2 boundary, and the last entry, which covers file path, bit width, sign and ordering errors.
 
@@ -132,7 +132,46 @@ The `argmax` test feeds score sequences with ties (expects the first index, as i
 
 ![argmax simulation](VHDL/img/argmax_wave.png)
 
-*`digit` follows the running maximum and stays at 2 when the equal score (230) arrives again at index 6.*
+*Ties keep the first index (230 at idx 6 → `digit` stays 2; −300 at idx 6 → `digit` stays 1). A large score with `en = 0` is ignored, and `clear` wins over `en` at the end.*
+
+## Top level (`mnist_core`)
+
+```
+          img_we/addr/data                         start         done, digit
+                 │                                   │                ▲
+                 ▼                                   ▼                │
+          ┌────────────┐                       ┌──────────┐           │
+          │ image RAM  │──┐                    │   FSM    │           │
+          └────────────┘  │ layer 1            └──────────┘           │
+          ┌────────────┐  ├──► pixel ─┐    addresses, load, en,       │
+          │  h1 regs   │──┘ layer 2   │    store, argmax en           │
+          └─────▲──────┘              ▼                               │
+                │        weight_rom ─► MAC ──► acc ──┬─► requant ──► h1 regs
+                │        bias_rom ───►              └─► argmax ──────┘
+                └──────────────────────────────────────────┘
+```
+
+FSM states per neuron: `BIAS_RD` (bias address) → `BIAS_LD` (`load`) → `RUN` (`cnt` = 0 … N) → `STORE`, 16 neurons with N = 196, then 10 neurons with N = 16.
+
+**Timing rule.** Every memory (weight ROM, bias ROM, image RAM, h1 registers) has a one-cycle synchronous read. Weights and inputs are addressed by the same counter, so they arrive in the same cycle, one cycle after the address. MAC `en` therefore runs one step behind the counter: `en = 0` at `cnt = 0`, `en = 1` for `cnt = 1 … N`. `neuron0_tb` shows what happens without this: the first neuron of the first image gives z = 115438 instead of 103898, because every pixel is multiplied by the previous weight.
+
+**Latency.** 16 × 200 + 10 × 20 = 3400 cycles per image, about 34 µs at 100 MHz (image loading not included).
+
+**Verification.**
+- `neuron0_tb`: first neuron of the first image, driven by hand: z = 103898, matching Python (`python/peek_neuron.py`).
+- `mnist_tb`: for the first image, all 16 `h1_q` values are checked against Python; for all 500 images, `digit` is compared with `expected.txt`. Result: **500 / 500**. Breaking the `en` timing on purpose drops this to 42 / 50 on the first 50 images, so the test does detect timing errors.
+
+Run (from `VHDL/`, takes about 40 s):
+
+```
+ghdl -a --std=08 weight_rom.vhd bias_rom.vhd mac.vhd requant.vhd argmax.vhd mnist_core.vhd mnist_tb.vhd
+ghdl -e --std=08 mnist_tb
+ghdl -r --std=08 mnist_tb
+```
+
+## How this was built
+
+The math, quantization scheme and module designs were worked out step by step on paper first. The Python code and the ROM, MAC, requant and argmax modules were written by me with guidance; the top-level FSM (`mnist_core`) and the full testbench (`mnist_tb`) were drafted with AI assistance (Claude) and then reviewed and verified against the Python model.
 
 ### Running a testbench
 
